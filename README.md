@@ -14,7 +14,7 @@
 
 ## Overview
 
-`full_recon.sh` is a full-spectrum recon automation script for bug bounty hunting and authorized penetration testing. It covers subdomain enumeration (passive, active, and permutation-based), ASN/IP discovery, live host probing, port scanning, crawling, historical URL discovery, JS/secret hunting, API endpoint discovery, cloud bucket enumeration, vulnerability-class URL filtering, screenshotting, and a known-CVE scan — all in one run.
+`recon_sh` is a full-spectrum recon automation script for bug bounty hunting and authorized penetration testing. It covers subdomain enumeration (passive, active, and permutation-based), ASN/IP discovery, live host probing, port scanning, crawling, historical URL discovery, JS/secret hunting, API endpoint discovery, cloud bucket enumeration, vulnerability-class URL filtering, screenshotting, and a known-CVE scan — all in one run.
 
 The script skips gracefully if a required tool isn't installed, so you can run it with whatever's already on your machine and fill in gaps over time.
 
@@ -56,14 +56,14 @@ Also needed:
 ## Usage
 
 ```bash
-chmod +x full_recon.sh
+chmod +x recon_sh
 
-./full_recon.sh example.com
+./recon_sh example.com
 ```
 
 Help / usage info:
 ```bash
-./full_recon.sh --help
+./recon_sh --help
 ```
 
 ---
