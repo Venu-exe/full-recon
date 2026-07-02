@@ -14,7 +14,7 @@
 
 ## Overview
 
-`recon_sh` is a full-spectrum recon automation script for bug bounty hunting and authorized penetration testing. It covers subdomain enumeration (passive, active, and permutation-based), ASN/IP discovery, live host probing, port scanning, crawling, historical URL discovery, JS/secret hunting, API endpoint discovery, cloud bucket enumeration, vulnerability-class URL filtering, screenshotting, and a known-CVE scan — all in one run.
+`full_recon.sh` is a full-spectrum recon automation script for bug bounty hunting and authorized penetration testing. It covers subdomain enumeration (passive, active, and permutation-based), ASN/IP discovery, live host probing, port scanning, crawling, historical URL discovery, JS/secret hunting, API endpoint discovery, cloud bucket enumeration, vulnerability-class URL filtering, screenshotting, and a known-CVE scan — all in one run.
 
 The script skips gracefully if a required tool isn't installed, so you can run it with whatever's already on your machine and fill in gaps over time.
 
@@ -56,14 +56,14 @@ Also needed:
 ## Usage
 
 ```bash
-chmod +x recon_sh
+chmod +x full_recon.sh
 
-./recon_sh example.com
+./full_recon.sh example.com
 ```
 
 Help / usage info:
 ```bash
-./recon_sh --help
+./full_recon.sh --help
 ```
 
 ---
@@ -81,9 +81,22 @@ Help / usage info:
 9. JS file extraction and secret/endpoint mining (`subjs` + regex grep)
 10. API spec discovery (Swagger, OpenAPI, GraphQL probing)
 11. Cloud storage bucket enumeration (`cloud_enum`)
-12. Vulnerability-class URL filtering (`gf`: xss, ssrf, redirect, ssti, sqli, lfi, idor, rce, interestingparams)
+12. Vulnerability-class URL filtering (`gf`: xss, ssrf, redirect, ssti, sqli, lfi, idor, rce, interestingparams, comment-inject, ssti-extended)
 13. Screenshotting live hosts (`gowitness`)
 14. Known CVE / misconfig scan (`nuclei`)
+
+If a required tool isn't installed, the script asks before installing it — no silent failures, no manual pre-flight checklist.
+
+---
+
+## Custom gf patterns
+
+Two extra patterns are auto-generated in `~/.gf/` on first run if missing:
+
+- `comment-inject` — flags params like `comment=`, `message=`, `review=`, `bio=` (candidates for stored HTML/comment injection)
+- `ssti-extended` — broader template-engine param matching beyond the default `ssti` pattern (`template=`, `render=`, `invoice=`, `theme=`, etc.)
+
+Both run automatically alongside the standard pattern set and land in `gf_results/`.
 
 ---
 
