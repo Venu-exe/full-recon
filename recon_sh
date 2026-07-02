@@ -1,19 +1,5 @@
 #!/bin/bash
 
-# ==========================================================
-# Comprehensive Bug Bounty Recon Automation Script
-# Usage: ./full_recon.sh target.com
-#
-# Covers: subdomain enum (passive+active+permutation), ASN/IP
-# discovery, live host probing, crawling, historical URLs,
-# JS/secret hunting, API endpoint discovery, cloud bucket
-# enum, port scanning, vuln-class filtering, screenshots.
-#
-# NOTE: This is a big toolchain. Not every tool will be
-# installed on every machine -- the script skips gracefully
-# if a tool is missing and tells you what to install.
-# Only run against domains you are authorized to test.
-# ==========================================================
 
 set -uo pipefail
 
