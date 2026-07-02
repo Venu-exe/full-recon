@@ -1,0 +1,270 @@
+#!/bin/bash
+
+# ==========================================================
+# Comprehensive Bug Bounty Recon Automation Script
+# Usage: ./full_recon.sh target.com
+#
+# Covers: subdomain enum (passive+active+permutation), ASN/IP
+# discovery, live host probing, crawling, historical URLs,
+# JS/secret hunting, API endpoint discovery, cloud bucket
+# enum, port scanning, vuln-class filtering, screenshots.
+#
+# NOTE: This is a big toolchain. Not every tool will be
+# installed on every machine -- the script skips gracefully
+# if a tool is missing and tells you what to install.
+# Only run against domains you are authorized to test.
+# ==========================================================
+
+set -uo pipefail
+
+red='\033[1;31m'
+RESET='\033[0m'
+echo -e "${red}"
+cat << "EOF"
+██████╗ ███████╗ ██████╗ ██████╗ ███╗   ██╗
+██╔══██╗██╔════╝██╔════╝██╔═══██╗████╗  ██║
+██████╔╝█████╗  ██║     ██║   ██║██╔██╗ ██║
+██╔══██╗██╔══╝  ██║     ██║   ██║██║╚██╗██║
+██║  ██║███████╗╚██████╗╚██████╔╝██║ ╚████║
+╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝
+              by venu-exe
+EOF
+echo -e "${RESET}"
+
+if [ -z "${1:-}" ]; then
+    echo "Usage: $0 <domain>"
+    exit 1
+fi
+
+DOMAIN=$1
+OUTDIR="recon_$DOMAIN"
+mkdir -p "$OUTDIR"/{subdomains,http,urls,js,api,cloud,ports,gf_results,screenshots,secrets}
+cd "$OUTDIR" || exit 1
+
+log() { echo -e "\n[*] $1"; }
+warn() { echo "[!] $1 (skipping)"; }
+have() { command -v "$1" &>/dev/null; }
+
+echo "=========================================="
+echo " Full Recon: $DOMAIN"
+echo " Output: $OUTDIR/"
+echo "=========================================="
+
+# ----------------------------------------------------------
+# 1. SUBDOMAIN ENUMERATION (passive + active + permutation)
+# ----------------------------------------------------------
+log "Passive subdomain enumeration (subfinder)"
+if have subfinder; then
+    subfinder -d "$DOMAIN" -silent -o subdomains/subfinder.txt
+else
+    warn "subfinder not installed"
+fi
+
+log "Passive subdomain enumeration (amass, passive mode)"
+if have amass; then
+    amass enum -passive -d "$DOMAIN" -o subdomains/amass_passive.txt
+else
+    warn "amass not installed"
+fi
+
+log "Certificate transparency (crt.sh)"
+if have curl && have jq; then
+    curl -s "https://crt.sh/?q=%25.$DOMAIN&output=json" \
+        | jq -r '.[].name_value' 2>/dev/null \
+        | sed 's/\*\.//g' | sort -u > subdomains/crtsh.txt
+else
+    warn "curl/jq not installed"
+fi
+
+# Combine all passive results
+cat subdomains/subfinder.txt subdomains/amass_passive.txt subdomains/crtsh.txt 2>/dev/null \
+    | grep -E "\.$DOMAIN$" | sort -u > subdomains/all_passive.txt
+
+log "Active brute-force (puredns + wordlist)"
+if have puredns && [ -f "$HOME/wordlists/subdomains.txt" ]; then
+    puredns bruteforce "$HOME/wordlists/subdomains.txt" "$DOMAIN" -q > subdomains/bruteforce.txt
+else
+    warn "puredns not installed or wordlist missing (~/wordlists/subdomains.txt) -- get one from SecLists"
+fi
+
+log "Permutation scanning (gotator/dnsgen on known subdomains)"
+if have gotator; then
+    gotator -sub subdomains/all_passive.txt -perm /dev/null -depth 1 -numbers 3 -mindup -silent \
+        > subdomains/permutations_raw.txt 2>/dev/null
+    if have puredns; then
+        puredns resolve subdomains/permutations_raw.txt -q > subdomains/permutations_resolved.txt
+    fi
+else
+    warn "gotator not installed"
+fi
+
+cat subdomains/*.txt 2>/dev/null | grep -E "\.$DOMAIN$|^$DOMAIN$" | sort -u > subdomains/final_all.txt
+log "Total unique subdomains found: $(wc -l < subdomains/final_all.txt)"
+
+# ----------------------------------------------------------
+# 2. ASN / IP RANGE DISCOVERY
+# ----------------------------------------------------------
+log "ASN / IP range discovery (amass intel)"
+if have amass; then
+    amass intel -org "$DOMAIN" -o subdomains/asn_org_lookup.txt 2>/dev/null
+else
+    warn "amass not installed -- skipping ASN lookup"
+fi
+
+# ----------------------------------------------------------
+# 3. LIVE HOST DISCOVERY
+# ----------------------------------------------------------
+log "Probing live hosts (httpx)"
+if have httpx; then
+    cat subdomains/final_all.txt | httpx -silent -title -status-code -tech-detect -follow-redirects \
+        -o http/live_hosts.txt
+    cat http/live_hosts.txt | awk '{print $1}' > http/live_urls.txt
+else
+    warn "httpx not installed -- most later steps depend on this, install it first"
+    touch http/live_urls.txt
+fi
+
+# ----------------------------------------------------------
+# 4. PORT SCANNING
+# ----------------------------------------------------------
+log "Port scanning live hosts (naabu, top 1000 ports)"
+if have naabu; then
+    cat http/live_urls.txt | sed 's~https\?://~~;s~/.*~~' | sort -u > ports/hosts_only.txt
+    naabu -list ports/hosts_only.txt -top-ports 1000 -silent -o ports/open_ports.txt
+else
+    warn "naabu not installed"
+fi
+
+# ----------------------------------------------------------
+# 5. CRAWLING + HISTORICAL URLS
+# ----------------------------------------------------------
+log "Crawling live hosts (katana)"
+if have katana; then
+    katana -list http/live_urls.txt -jc -silent -o urls/crawled.txt
+else
+    warn "katana not installed"
+    touch urls/crawled.txt
+fi
+
+log "Historical URLs (gau)"
+if have gau; then
+    cat http/live_urls.txt | gau --subs > urls/gau.txt 2>/dev/null
+else
+    warn "gau not installed"
+    touch urls/gau.txt
+fi
+
+log "Historical URLs (waybackurls, as second source)"
+if have waybackurls; then
+    cat http/live_urls.txt | waybackurls > urls/wayback.txt 2>/dev/null
+else
+    warn "waybackurls not installed"
+    touch urls/wayback.txt
+fi
+
+cat urls/crawled.txt urls/gau.txt urls/wayback.txt 2>/dev/null | sort -u > urls/all_urls.txt
+log "Total unique URLs found: $(wc -l < urls/all_urls.txt)"
+
+# ----------------------------------------------------------
+# 6. JS FILE DISCOVERY + SECRET/ENDPOINT EXTRACTION
+# ----------------------------------------------------------
+log "Extracting JS files"
+grep -E "\.js($|\?)" urls/all_urls.txt | sort -u > js/js_files.txt
+
+log "Mining JS files for endpoints/secrets (subjs + secretfinder-style grep)"
+if have subjs; then
+    cat http/live_urls.txt | subjs >> js/js_files.txt 2>/dev/null
+    sort -u -o js/js_files.txt js/js_files.txt
+fi
+# lightweight inline grep for common secret patterns as a fallback
+if have curl; then
+    while read -r js_url; do
+        curl -s "$js_url" 2>/dev/null
+    done < <(head -n 50 js/js_files.txt) \
+        | grep -Eo "(api[_-]?key|secret|token|aws_access_key_id|Bearer [A-Za-z0-9\-_]+)[\"': =]+[A-Za-z0-9\-_/+=]{10,}" \
+        > secrets/js_secrets_sample.txt 2>/dev/null || true
+fi
+
+# ----------------------------------------------------------
+# 7. API-SPECIFIC RECON
+# ----------------------------------------------------------
+log "Probing for API docs / specs (Swagger, OpenAPI, GraphQL)"
+API_PATHS=("swagger.json" "swagger-ui.html" "api-docs" "api/swagger.json" "openapi.json" "graphql" "v1/swagger.json" "v2/api-docs")
+if have httpx; then
+    : > api/api_candidates.txt
+    for host in $(cat http/live_urls.txt); do
+        for path in "${API_PATHS[@]}"; do
+            echo "$host/$path"
+        done
+    done > api/api_probe_list.txt
+    cat api/api_probe_list.txt | httpx -silent -status-code -mc 200 -o api/found_api_endpoints.txt
+else
+    warn "httpx not installed -- skipping API probing"
+fi
+
+# ----------------------------------------------------------
+# 8. CLOUD ASSET ENUMERATION (S3 / Azure / GCP buckets)
+# ----------------------------------------------------------
+log "Cloud bucket enumeration"
+if have cloud_enum; then
+    cloud_enum -k "$DOMAIN" -k "${DOMAIN%%.*}" -l cloud/cloud_enum_results.txt
+else
+    warn "cloud_enum not installed (https://github.com/initstring/cloud_enum) -- skipping bucket enum"
+fi
+
+# ----------------------------------------------------------
+# 9. VULN-CLASS CANDIDATE FILTERING (gf patterns)
+# ----------------------------------------------------------
+log "Filtering URLs by vulnerability class (gf patterns)"
+if have gf; then
+    for pattern in xss ssrf redirect ssti sqli lfi idor rce interestingparams; do
+        cat urls/all_urls.txt | gf "$pattern" 2>/dev/null > "gf_results/${pattern}.txt" || true
+    done
+else
+    warn "gf not installed -- skipping vuln-class filtering"
+fi
+
+# ----------------------------------------------------------
+# 10. SCREENSHOTS (visual recon)
+# ----------------------------------------------------------
+log "Screenshotting live hosts (gowitness)"
+if have gowitness; then
+    gowitness file -f http/live_urls.txt -P screenshots/ --no-http-server &>/dev/null || true
+else
+    warn "gowitness not installed"
+fi
+
+# ----------------------------------------------------------
+# 11. QUICK NUCLEI SCAN (known CVEs / misconfigs -- optional)
+# ----------------------------------------------------------
+log "Running nuclei (known vulns + exposures templates)"
+if have nuclei; then
+    nuclei -list http/live_urls.txt -tags cve,exposure,misconfig -silent -o ports/nuclei_findings.txt
+else
+    warn "nuclei not installed"
+fi
+
+# ----------------------------------------------------------
+# SUMMARY
+# ----------------------------------------------------------
+echo ""
+echo "=========================================="
+echo "[+] Full recon complete for $DOMAIN"
+echo "[+] Results in: $OUTDIR/"
+echo "--------------------------------------------------------"
+echo " subdomains/final_all.txt        : all discovered subdomains"
+echo " subdomains/asn_org_lookup.txt   : ASN/IP ranges owned by org"
+echo " http/live_hosts.txt             : live hosts w/ status, title, tech"
+echo " ports/open_ports.txt            : open ports per host"
+echo " urls/all_urls.txt               : all crawled + historical URLs"
+echo " js/js_files.txt                 : all discovered JS files"
+echo " secrets/js_secrets_sample.txt   : possible leaked keys/tokens (sample)"
+echo " api/found_api_endpoints.txt     : live Swagger/OpenAPI/GraphQL endpoints"
+echo " cloud/cloud_enum_results.txt    : discovered cloud storage buckets"
+echo " gf_results/*.txt                : URLs bucketed by vuln class"
+echo " screenshots/                    : visual recon of all live hosts"
+echo " ports/nuclei_findings.txt       : known CVE/misconfig hits"
+echo "=========================================="
+echo ""
+echo "This still doesn't replace manual testing -- treat this output"
+echo "as your prioritized target list, not a finished job."
