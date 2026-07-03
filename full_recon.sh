@@ -119,7 +119,7 @@ ensure_tool() {
 echo -e "${CYAN}=========================================="
 echo " Full Recon: $DOMAIN"
 echo " Output: $OUTDIR/"
-echo "==========================================${RESET}"
+echo "=========================================="
 
 # ----------------------------------------------------------
 # 1. SUBDOMAIN ENUMERATION (passive + active + permutation)
@@ -130,8 +130,8 @@ if ensure_tool subfinder "go install -v github.com/projectdiscovery/subfinder/v2
 fi
 
 log "Passive subdomain enumeration (amass, passive mode)"
-if ensure_tool amass "sudo pacman -S amass"; then
-    amass enum -passive -d "$DOMAIN" -o subdomains/amass_passive.txt
+if ensure_tool amass "go install -v github.com/owasp-amass/amass/v4/cmd/amass@latest"; then
+    amass enum -passive -d "$DOMAIN" -o subdomains/amass_passive.txt 2>/dev/null
 fi
 
 log "Certificate transparency (crt.sh)"
