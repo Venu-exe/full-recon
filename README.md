@@ -186,14 +186,18 @@ For `full_recon.sh` only:
 
 Separate download command for just daily_recon.sh:
 
-# Download only daily_recon.sh from GitHub
-curl -O https://raw.githubusercontent.com/Venu-exe/full-recon/master/daily_recon.sh
-chmod +x daily_recon.sh
+## Download only daily_recon.sh from GitHub
 
-# Or use wget
+```bash
+curl -O https://raw.githubusercontent.com/Venu-exe/full-recon/master/daily_recon.sh
+
+chmod +x daily_recon.sh
+```
+```bash
+## Or use wget
 wget https://raw.githubusercontent.com/Venu-exe/full-recon/master/daily_recon.sh
 chmod +x daily_recon.sh
-
+```
 <p align="center">Made by <a href="https://github.com/Venu-exe">venu-exe</a></p>
 
 
