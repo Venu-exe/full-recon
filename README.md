@@ -196,8 +196,11 @@ chmod +x daily_recon.sh
 ```bash
 ## Or use wget
 wget https://raw.githubusercontent.com/Venu-exe/full-recon/master/daily_recon.sh
+
 chmod +x daily_recon.sh
 ```
+---
+
 <p align="center">Made by <a href="https://github.com/Venu-exe">venu-exe</a></p>
 
 
