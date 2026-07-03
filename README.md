@@ -117,4 +117,83 @@ Running recon or scanning tools against systems you don't own or don't have expl
 
 ---
 
+## Scripts
+
+This repo contains two recon automation scripts:
+
+| Script | Speed | Best For | Features |
+|--------|-------|----------|----------|
+| `daily_recon.sh` | 10-12 min | Daily hunting, high-volume testing | Fast subdomain enum, live host check, crawling, gf filtering (XSS/SSRF/IDOR focused) |
+| `full_recon.sh` | 60 min | Deep dives, thorough audits | Everything above + port scanning, API discovery, cloud bucket enum, nuclei scan, screenshots |
+
+### Which script to use?
+
+- **Daily hunting (15-20 domains/day):** Use `daily_recon.sh`
+- **Serious audit (1-2 domains):** Use `full_recon.sh`
+
+---
+
+## Usage
+
+### Fast Daily Hunting
+
+```bash
+./daily_recon.sh target.com
+```
+
+Run on multiple domains in parallel:
+
+```bash
+./daily_recon.sh target1.com &
+./daily_recon.sh target2.com &
+./daily_recon.sh target3.com &
+```
+
+### Full Comprehensive Recon
+
+```bash
+./full_recon.sh target.com
+```
+
+---
+
+## Output
+
+Both scripts create `recon_<domain>/` with results:
+
+- `subdomains/` — discovered subdomains
+- `http/` — live hosts with tech stack
+- `urls/` — all crawled + historical URLs
+- `gf_results/` — URLs filtered by vulnerability class (XSS, SSRF, IDOR, etc)
+
+For `full_recon.sh` only:
+- `ports/` — open ports + nuclei findings
+- `api/` — API endpoints
+- `cloud/` — misconfigured cloud buckets
+- `screenshots/` — visual recon
+
+---
+
+## Recommended Workflow
+
+1. **High-volume testing:** Use `daily_recon.sh` on 15-20 domains/day
+2. **Test results:** Review `gf_results/xss.txt`, `gf_results/ssrf.txt`, etc.
+3. **Manual verification:** Use dalfox, manual testing, or Burp Suite
+4. **Report:** Submit findings to HackerOne/Bugcrowd
+5. **Deep dive:** If promising, run `full_recon.sh` on specific targets
+
+---
+
+Separate download command for just daily_recon.sh:
+
+# Download only daily_recon.sh from GitHub
+curl -O https://raw.githubusercontent.com/Venu-exe/full-recon/master/daily_recon.sh
+chmod +x daily_recon.sh
+
+# Or use wget
+wget https://raw.githubusercontent.com/Venu-exe/full-recon/master/daily_recon.sh
+chmod +x daily_recon.sh
+
 <p align="center">Made by <a href="https://github.com/Venu-exe">venu-exe</a></p>
+
+
