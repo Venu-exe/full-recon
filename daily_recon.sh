@@ -86,6 +86,23 @@ SUBCOUNT=$(wc -l < subdomains/final.txt 2>/dev/null || echo 0)
 log "Found $SUBCOUNT subdomains"
 
 # ----------------------------------------------------------
+# 1.5. SCOPE FILTERING
+# Keep a file at ~/scopes/<domain>_scope.txt listing in-scope
+# wildcard patterns (one per line, e.g. "agoda.com", ".agoda.com")
+# pulled straight from the program's HackerOne scope tab.
+# ----------------------------------------------------------
+SCOPEFILE="$HOME/scopes/${DOMAIN}_scope.txt"
+if [ -f "$SCOPEFILE" ]; then
+    log "Filtering against known scope ($SCOPEFILE)"
+    grep -Ff "$SCOPEFILE" subdomains/final.txt > subdomains/in_scope.txt 2>/dev/null || true
+    mv subdomains/final.txt subdomains/final_unfiltered.txt
+    mv subdomains/in_scope.txt subdomains/final.txt
+    success "Filtered to in-scope only: $(wc -l < subdomains/final.txt) (was $SUBCOUNT)"
+else
+    warn "No scope file at $SCOPEFILE -- skipping filter, verify scope manually before testing anything"
+fi
+
+# ----------------------------------------------------------
 # 2. LIVE HOST CHECK
 # ----------------------------------------------------------
 log "Checking live hosts (httpx)"
@@ -102,14 +119,25 @@ else
 fi
 
 # ----------------------------------------------------------
+# 2.5. NOISE-DOMAIN EXCLUSION
+# Skip CDN/analytics/tracking hosts -- they waste crawl time
+# and never have the app logic we're after.
+# ----------------------------------------------------------
+log "Filtering out CDN/analytics noise domains"
+grep -vE "^https?://(cdn|static|assets|img|pix|bento|tags|analytics|tracking|metrics)[0-9]*\." \
+    http/live_urls.txt > http/live_urls_filtered.txt 2>/dev/null || cp http/live_urls.txt http/live_urls_filtered.txt
+NOISECOUNT=$(( $(wc -l < http/live_urls.txt 2>/dev/null || echo 0) - $(wc -l < http/live_urls_filtered.txt 2>/dev/null || echo 0) ))
+success "Excluded $NOISECOUNT noise hosts, $(wc -l < http/live_urls_filtered.txt) remain for crawling"
+
+# ----------------------------------------------------------
 # 3. CRAWL + HISTORICAL URLS (parallel)
 # ----------------------------------------------------------
 log "Crawling + historical URLs (parallel)"
 
-(katana -list http/live_urls.txt -jc -silent -o urls/crawled.txt 2>/dev/null) &
+(katana -list http/live_urls_filtered.txt -jc -silent -o urls/crawled.txt 2>/dev/null) &
 PID1=$!
 
-(cat http/live_urls.txt | gau --subs > urls/gau.txt 2>/dev/null) &
+(cat http/live_urls_filtered.txt | gau --subs > urls/gau.txt 2>/dev/null) &
 PID2=$!
 
 wait $PID1 $PID2 2>/dev/null
@@ -134,9 +162,17 @@ EOF
 {"flags": "-iE", "pattern": "(template|preview|render|report|invoice|email_template)="}
 EOF
 
+[ ! -f "$HOME/.gf/redirect.json" ] && cat > "$HOME/.gf/redirect.json" << 'EOF'
+{"flags": "-iE", "pattern": "(url|redirect|return|next|dest|continue|target)="}
+EOF
+
+[ ! -f "$HOME/.gf/idor-extended.json" ] && cat > "$HOME/.gf/idor-extended.json" << 'EOF'
+{"flags": "-iE", "pattern": "(user_id|account_id|order_id|booking_id|reservation_id|invoice_id)="}
+EOF
+
 if have gf; then
     # Focus on high-probability vulns only
-    for pattern in xss ssrf comment-inject ssti-extended idor; do
+    for pattern in xss ssrf comment-inject ssti-extended idor idor-extended redirect; do
         cat urls/all_urls.txt | gf "$pattern" 2>/dev/null > "gf_results/${pattern}.txt" || true
     done
     
@@ -151,6 +187,32 @@ else
 fi
 
 # ----------------------------------------------------------
+# 5. DIFF AGAINST PREVIOUS RUN
+# Highlights what's NEW since yesterday -- new subdomains/URLs
+# are fresher, less-tested surface and worth checking first.
+# ----------------------------------------------------------
+cd ..
+PREVDIR="recon_${DOMAIN}_previous"
+if [ -d "$PREVDIR" ]; then
+    log "Diffing against previous run"
+    comm -13 <(sort "$PREVDIR/subdomains/final.txt" 2>/dev/null) <(sort "$OUTDIR/subdomains/final.txt" 2>/dev/null) \
+        > "$OUTDIR/subdomains/NEW_subdomains.txt" 2>/dev/null || true
+    comm -13 <(sort "$PREVDIR/urls/all_urls.txt" 2>/dev/null) <(sort "$OUTDIR/urls/all_urls.txt" 2>/dev/null) \
+        > "$OUTDIR/urls/NEW_urls.txt" 2>/dev/null || true
+    NEWSUBS=$(wc -l < "$OUTDIR/subdomains/NEW_subdomains.txt" 2>/dev/null || echo 0)
+    NEWURLS=$(wc -l < "$OUTDIR/urls/NEW_urls.txt" 2>/dev/null || echo 0)
+    success "New subdomains since last run: $NEWSUBS"
+    success "New URLs since last run: $NEWURLS"
+else
+    warn "No previous run found -- this is the baseline, diffing starts tomorrow"
+fi
+
+# Save this run as tomorrow's "previous" baseline
+rm -rf "$PREVDIR"
+cp -r "$OUTDIR" "$PREVDIR"
+cd "$OUTDIR" || exit 1
+
+# ----------------------------------------------------------
 # SUMMARY
 # ----------------------------------------------------------
 echo ""
@@ -159,10 +221,14 @@ echo -e "${GREEN}[+]${RESET} Recon complete for $DOMAIN"
 echo "=========================================="
 echo ""
 echo "Quick test commands:"
-echo "  XSS candidates:     cat gf_results/xss.txt | head -5"
-echo "  SSRF candidates:    cat gf_results/ssrf.txt | head -5"
-echo "  Comment-inject:     cat gf_results/comment-inject.txt | head -5"
-echo "  IDOR candidates:    cat gf_results/idor.txt | head -5"
+echo "  NEW subdomains today:  cat subdomains/NEW_subdomains.txt"
+echo "  NEW URLs today:        cat urls/NEW_urls.txt"
+echo "  XSS candidates:        cat gf_results/xss.txt | head -5"
+echo "  SSRF candidates:       cat gf_results/ssrf.txt | head -5"
+echo "  Redirect candidates:   cat gf_results/redirect.txt | head -5"
+echo "  Comment-inject:        cat gf_results/comment-inject.txt | head -5"
+echo "  IDOR candidates:       cat gf_results/idor.txt | head -5"
+echo "  IDOR (extended):       cat gf_results/idor-extended.txt | head -5"
 echo ""
-echo "Next: Use dalfox on xss.txt, test manually for SSRF/IDOR"
+echo "Next: Use dalfox on xss.txt, test manually for SSRF/IDOR/redirects"
 echo -e "${CYAN}==========================================${RESET}"
