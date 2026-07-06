@@ -1,2 +1,28 @@
-recon_*/
-*.log
+
+# Large URL dumps
+recon_*/urls/all_urls.txt
+recon_*/urls/crawled.txt
+recon_*/urls/gau.txt
+ 
+# Sensitive data
+*.env
+*.apikey
+*.token
+secrets/
+*.key
+ 
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+ 
+# Temporary
+*.tmp
+*.bak
+ 
+# Node/Go deps
+node_modules/
+go.sum
+go.mod
+ 
