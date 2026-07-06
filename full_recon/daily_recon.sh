@@ -325,18 +325,6 @@ High-value findings:
 - Redirect candidates: $(wc -l < gf_results/redirect.txt 2>/dev/null || echo 0)
 SUMMARY
     
-    # Git push
-    cd "$GIT_REPO"
-    git add findings/$DOMAIN 2>/dev/null || true
-    git commit -m "Recon: $DOMAIN - $(date '+%Y-%m-%d')" 2>/dev/null || true
-    git push origin $GIT_BRANCH 2>/dev/null && success "✓ Pushed to GitHub" || warn "Git push failed"
-    
-    log "Results saved to: $GIT_OUTDIR"
-else
-    warn "GitHub repo not found at $GIT_REPO"
-    log "To enable GitHub push, set up a repo:"
-    log "  git clone https://github.com/YOUR_USERNAME/bug-bounty-recon.git ~/bug-bounty-recon"
-    log "  cd ~/bug-bounty-recon && git config user.email 'your@email.com' && git config user.name 'Your Name'"
 fi
 
 # ----------------------------------------------------------
