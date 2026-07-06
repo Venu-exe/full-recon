@@ -60,19 +60,8 @@ echo 'set -Uxa PATH ~/.local/bin' >> ~/.config/fish/config.fish
 source ~/.config/fish/config.fish
 ```
 
-### 3. Set Up GitHub (Optional but Recommended)
 
-```fish
-# Clone your bug bounty repo
-git clone https://github.com/YOUR_USERNAME/bug-bounty-recon.git ~/bug-bounty-recon
-cd ~/bug-bounty-recon
-git config user.email "your@email.com"
-git config user.name "Your Name"
-mkdir -p findings
-git add . && git commit -m "Initial commit" && git push
-```
 
-Now recon results auto-push to GitHub! See `docs/GITHUB_SETUP.md` for full instructions.
 
 ### 4. Run Your First Recon
 
@@ -142,7 +131,7 @@ cat recon_target.com/triage/priority_list.csv
 cat recon_target.com/triage/priority_list.md
 
 # View on GitHub
-https://github.com/YOUR_USERNAME/bug-bounty-recon/tree/main/findings/target.com
+https://github.com/Venu-exe/full-recon.git
 ```
 
 ---
@@ -248,7 +237,7 @@ cat recon_target.com/gf_results/idor.txt | head -20
 daily_recon.sh target.com
 
 # 2. Results auto-push to:
-# https://github.com/YOUR_USERNAME/bug-bounty-recon/tree/main/findings/target.com
+# https://github.com/Venu-exe/full-recon.git
 
 # 3. View priority list (any format)
 cat ~/bug-bounty-recon/findings/target.com/triage/priority_list.txt
@@ -409,7 +398,7 @@ view recon_target1.com/triage/priority_list.txt
 # Manual testing on priority findings (30-60 min)
 
 # 3. Results auto-pushed to GitHub
-# https://github.com/YOUR_USERNAME/bug-bounty-recon/tree/main/findings/target1.com
+# https://github.com/Venu-exe/full-recon.git
 
 # 4. Submit findings
 # Create report on HackerOne/Bugcrowd
