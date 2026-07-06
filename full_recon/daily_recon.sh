@@ -121,12 +121,15 @@ fi
 
 # ----------------------------------------------------------
 # 2.5. NOISE-DOMAIN EXCLUSION
-# Skip CDN/analytics/tracking hosts -- they waste crawl time
-# and never have the app logic we're after.
+# Skip CDN/analytics/tracking/third-party hosts -- they waste 
+# crawl time and never have the app logic we're after.
 # ----------------------------------------------------------
-log "Filtering out CDN/analytics noise domains"
-grep -vE "^https?://(cdn|static|assets|img|pix|bento|tags|analytics|tracking|metrics)[0-9]*\." \
-    http/live_urls.txt > http/live_urls_filtered.txt 2>/dev/null || cp http/live_urls.txt http/live_urls_filtered.txt
+log "Filtering out CDN/analytics/third-party noise domains"
+
+# Comprehensive noise domain list (Google, Facebook, tracking, CDN, auth, etc.)
+NOISE_DOMAINS="(cdn|static|assets|img|pix|bento|tags|analytics|tracking|metrics|google|facebook|doubleclick|amazon|cloudfront|cloudflare|fastly|akamai|datadog|sentry|intercom|mixpanel|segment|amplitude|appsflyer|firebase|twitter|github|slack|stripe|paypal|auth0|okta|login\.microsoftonline|accounts\.google|googleapis|gstatic|fonts\.google|pagead|adservice|ads|googletagmanager)"
+
+grep -vE "^https?://(${NOISE_DOMAINS})[0-9]*\." http/live_urls.txt > http/live_urls_filtered.txt 2>/dev/null || cp http/live_urls.txt http/live_urls_filtered.txt
 NOISECOUNT=$(( $(wc -l < http/live_urls.txt 2>/dev/null || echo 0) - $(wc -l < http/live_urls_filtered.txt 2>/dev/null || echo 0) ))
 success "Excluded $NOISECOUNT noise hosts, $(wc -l < http/live_urls_filtered.txt) remain for crawling"
 
@@ -277,6 +280,64 @@ log "Output directory: $OUTDIR"
 rm -rf "$PREVDIR"
 cp -r "$OUTDIR" "$PREVDIR"
 cd "$OUTDIR" || exit 1
+
+# ----------------------------------------------------------
+# GITHUB PUSH (optional)
+# ----------------------------------------------------------
+section "GitHub Integration"
+
+GIT_REPO="$HOME/bug-bounty-recon"  # Change to your repo path
+GIT_BRANCH="$(git config --get-regexp '^remote\.' 2>/dev/null | head -1 | awk '{print $2}' | sed 's/^//')" 
+GIT_BRANCH="${GIT_BRANCH:-main}"
+
+if [ -d "$GIT_REPO" ]; then
+    log "Pushing results to GitHub ($GIT_REPO)"
+    
+    # Copy only the most important findings to avoid bloat
+    GIT_OUTDIR="$GIT_REPO/findings/$DOMAIN"
+    mkdir -p "$GIT_OUTDIR"
+    
+    # Copy key findings (not all URLs to avoid huge commits)
+    cp subdomains/final.txt "$GIT_OUTDIR/subdomains.txt" 2>/dev/null || true
+    cp http/live_urls.txt "$GIT_OUTDIR/live_hosts.txt" 2>/dev/null || true
+    
+    # Copy gf results
+    mkdir -p "$GIT_OUTDIR/gf_results"
+    cp gf_results/*.txt "$GIT_OUTDIR/gf_results/" 2>/dev/null || true
+    
+    # Copy triage if exists
+    if [ -d "triage" ]; then
+        cp -r triage "$GIT_OUTDIR/" 2>/dev/null || true
+    fi
+    
+    # Create a summary file
+    cat > "$GIT_OUTDIR/SUMMARY.txt" << SUMMARY
+Domain: $DOMAIN
+Date: $(date '+%Y-%m-%d %H:%M:%S')
+Subdomains found: $(wc -l < subdomains/final.txt 2>/dev/null || echo 0)
+Live hosts: $(wc -l < http/live_urls.txt 2>/dev/null || echo 0)
+URLs with params: $(wc -l < urls/with_params.txt 2>/dev/null || echo 0)
+
+High-value findings:
+- XSS candidates: $(wc -l < gf_results/xss.txt 2>/dev/null || echo 0)
+- SSRF candidates: $(wc -l < gf_results/ssrf.txt 2>/dev/null || echo 0)
+- IDOR candidates: $(wc -l < gf_results/idor.txt 2>/dev/null || echo 0)
+- Redirect candidates: $(wc -l < gf_results/redirect.txt 2>/dev/null || echo 0)
+SUMMARY
+    
+    # Git push
+    cd "$GIT_REPO"
+    git add findings/$DOMAIN 2>/dev/null || true
+    git commit -m "Recon: $DOMAIN - $(date '+%Y-%m-%d')" 2>/dev/null || true
+    git push origin $GIT_BRANCH 2>/dev/null && success "✓ Pushed to GitHub" || warn "Git push failed"
+    
+    log "Results saved to: $GIT_OUTDIR"
+else
+    warn "GitHub repo not found at $GIT_REPO"
+    log "To enable GitHub push, set up a repo:"
+    log "  git clone https://github.com/YOUR_USERNAME/bug-bounty-recon.git ~/bug-bounty-recon"
+    log "  cd ~/bug-bounty-recon && git config user.email 'your@email.com' && git config user.name 'Your Name'"
+fi
 
 # ----------------------------------------------------------
 # SUMMARY
