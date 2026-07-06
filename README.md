@@ -63,7 +63,7 @@ source ~/.config/fish/config.fish
 
 
 
-### 4. Run Your First Recon
+### 3. Run Your First Recon
 
 ```fish
 # From anywhere
