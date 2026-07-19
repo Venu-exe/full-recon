@@ -125,6 +125,7 @@ This repo contains two recon automation scripts:
 |--------|-------|----------|----------|
 | `daily_recon.sh` | 10-12 min | Daily hunting, high-volume testing | Fast subdomain enum, live host check, crawling, gf filtering (XSS/SSRF/IDOR focused) |
 | `full_recon.sh` | 60 min | Deep dives, thorough audits | Everything above + port scanning, API discovery, cloud bucket enum, nuclei scan, screenshots |
+| `simple.py` | N/A | OOB Testing & SSRF | A safe, local TCP echo server for verifying network interactions from payloads |
 
 ### Which script to use?
 
