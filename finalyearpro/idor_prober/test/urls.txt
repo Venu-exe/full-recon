@@ -1,0 +1,6 @@
+http://127.0.0.1:8899/user/1001/profile
+http://127.0.0.1:8899/safe/1001/profile
+http://127.0.0.1:8899/api/v1/users/1001/orders
+http://127.0.0.1:8899/api/v1/admin/users/1001
+http://127.0.0.1:8899/api/v1/shared/config
+http://127.0.0.1:8899/api/v1/users/1001/avatar
